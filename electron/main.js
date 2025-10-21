@@ -99,7 +99,11 @@ Searched locations:
     return;
   }
 
-  console.log(`Using R executable: ${rExecutable}`);
+  const rPath = rExecutable.path;
+  const useRscript = rExecutable.useRscript;
+
+  console.log(`Using R executable: ${rPath}`);
+  console.log(`Using Rscript mode: ${useRscript}`);
 
   // R command to start Shiny
   const rCommand = `
@@ -120,7 +124,14 @@ Searched locations:
   console.log(rCommand);
 
   // Spawn R process
-  rProcess = spawn(rExecutable, ['--vanilla', '--quiet', '-e', rCommand], {
+  // Rscript doesn't need --vanilla flag
+  const args = useRscript
+    ? ['-e', rCommand]
+    : ['--vanilla', '--quiet', '-e', rCommand];
+
+  console.log(`Spawning: ${rPath} ${args.join(' ')}`);
+
+  rProcess = spawn(rPath, args, {
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -160,7 +171,7 @@ Searched locations:
     console.error('Failed to start R process:', error);
     dialog.showErrorBox(
       'Failed to Start R',
-      `Could not start R process.\n\nError: ${error.message}\n\nR executable: ${rExecutable}\n\nPlease ensure R is properly installed.`
+      `Could not start R process.\n\nError: ${error.message}\n\nR executable: ${rPath}\n\nPlease ensure R is properly installed.`
     );
     app.quit();
   });
@@ -204,14 +215,27 @@ function findRExecutable() {
   const { execSync } = require('child_process');
   const fs = require('fs');
 
-  // Method 1: Try R in PATH
-  try {
-    execSync('R --version', { stdio: 'ignore' });
-    console.log('Found R in PATH');
-    return 'R';
-  } catch (e) {
-    console.log('R not found in PATH, searching in common locations...');
+  // Method 1: Try R/Rscript in PATH
+  // Note: In MINGW/Git Bash, 'R' wrapper might not work with spawn()
+  // Prefer Rscript.exe or R.exe with full extension
+  const pathCommands = [
+    { cmd: 'Rscript.exe', useRscript: true },
+    { cmd: 'R.exe', useRscript: false },
+    { cmd: 'Rscript', useRscript: true },
+    { cmd: 'R', useRscript: false }
+  ];
+
+  for (const { cmd, useRscript } of pathCommands) {
+    try {
+      execSync(`${cmd} --version`, { stdio: 'ignore', timeout: 5000 });
+      console.log(`Found ${cmd} in PATH`);
+      return { path: cmd, useRscript };
+    } catch (e) {
+      // Try next command
+    }
   }
+
+  console.log('R not found in PATH, searching in common locations...');
 
   // Method 2: Search in Program Files
   const programFilesLocations = [
@@ -234,23 +258,47 @@ function findRExecutable() {
           const rExePath = path.join(rBaseDir, version, 'bin', 'R.exe');
           const rExePathX64 = path.join(rBaseDir, version, 'bin', 'x64', 'R.exe');
 
-          // Try x64 version first
-          if (fs.existsSync(rExePathX64)) {
+          // Try Rscript.exe first (more reliable with spawn)
+          const rscriptPathX64 = path.join(rBaseDir, version, 'bin', 'x64', 'Rscript.exe');
+          const rscriptPath = path.join(rBaseDir, version, 'bin', 'Rscript.exe');
+
+          if (fs.existsSync(rscriptPathX64)) {
             try {
-              execSync(`"${rExePathX64}" --version`, { stdio: 'ignore', timeout: 5000 });
-              console.log(`Found R at: ${rExePathX64}`);
-              return rExePathX64;
+              execSync(`"${rscriptPathX64}" --version`, { stdio: 'ignore', timeout: 5000 });
+              console.log(`Found Rscript at: ${rscriptPathX64}`);
+              return { path: rscriptPathX64, useRscript: true };
             } catch (e) {
               // Continue searching
             }
           }
 
-          // Try standard version
+          if (fs.existsSync(rscriptPath)) {
+            try {
+              execSync(`"${rscriptPath}" --version`, { stdio: 'ignore', timeout: 5000 });
+              console.log(`Found Rscript at: ${rscriptPath}`);
+              return { path: rscriptPath, useRscript: true };
+            } catch (e) {
+              // Continue searching
+            }
+          }
+
+          // Try x64 R.exe
+          if (fs.existsSync(rExePathX64)) {
+            try {
+              execSync(`"${rExePathX64}" --version`, { stdio: 'ignore', timeout: 5000 });
+              console.log(`Found R at: ${rExePathX64}`);
+              return { path: rExePathX64, useRscript: false };
+            } catch (e) {
+              // Continue searching
+            }
+          }
+
+          // Try standard R.exe
           if (fs.existsSync(rExePath)) {
             try {
               execSync(`"${rExePath}" --version`, { stdio: 'ignore', timeout: 5000 });
               console.log(`Found R at: ${rExePath}`);
-              return rExePath;
+              return { path: rExePath, useRscript: false };
             } catch (e) {
               // Continue searching
             }
@@ -274,16 +322,26 @@ function findRExecutable() {
       const match = result.match(/InstallPath\s+REG_SZ\s+(.+)/);
       if (match) {
         const installPath = match[1].trim();
-        const rExePath = path.join(installPath, 'bin', 'R.exe');
+        const rscriptPathX64 = path.join(installPath, 'bin', 'x64', 'Rscript.exe');
+        const rscriptPath = path.join(installPath, 'bin', 'Rscript.exe');
         const rExePathX64 = path.join(installPath, 'bin', 'x64', 'R.exe');
+        const rExePath = path.join(installPath, 'bin', 'R.exe');
 
+        if (fs.existsSync(rscriptPathX64)) {
+          console.log(`Found Rscript from registry: ${rscriptPathX64}`);
+          return { path: rscriptPathX64, useRscript: true };
+        }
+        if (fs.existsSync(rscriptPath)) {
+          console.log(`Found Rscript from registry: ${rscriptPath}`);
+          return { path: rscriptPath, useRscript: true };
+        }
         if (fs.existsSync(rExePathX64)) {
           console.log(`Found R from registry: ${rExePathX64}`);
-          return rExePathX64;
+          return { path: rExePathX64, useRscript: false };
         }
         if (fs.existsSync(rExePath)) {
           console.log(`Found R from registry: ${rExePath}`);
-          return rExePath;
+          return { path: rExePath, useRscript: false };
         }
       }
     } catch (e) {
