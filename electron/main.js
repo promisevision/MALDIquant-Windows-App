@@ -49,6 +49,18 @@ function createWindow() {
     mainWindow.show();
   });
 
+  // Filter console errors (ignore Shiny's dragEvent errors)
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    // Suppress known non-critical errors
+    if (message.includes('dragEvent is not defined')) {
+      return; // Don't log this error
+    }
+    // Log other messages normally
+    if (level >= 2) { // 2 = warning, 3 = error
+      console.log(`[Browser Console] ${message}`);
+    }
+  });
+
   // Save window bounds on close
   mainWindow.on('close', () => {
     store.set('windowBounds', mainWindow.getBounds());
@@ -141,9 +153,12 @@ Searched locations:
     // Check if Shiny is ready
     if (data.toString().includes('Listening on')) {
       console.log('Shiny server is ready!');
+      console.log('Loading application UI...');
+      console.log('This may take 30-60 seconds on first launch...');
       setTimeout(() => {
+        console.log('Connecting to Shiny server...');
         mainWindow.loadURL(`http://127.0.0.1:${shinyPort}`);
-      }, 1000);
+      }, 2000);
     }
   });
 
