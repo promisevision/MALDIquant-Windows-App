@@ -16,7 +16,15 @@ if (USE_COLOURPICKER) {
 # UI Definition
 ui <- fluidPage(
   tags$head(
-    tags$title("MALDIquant - Mass Spectrometry Analyzer")
+    tags$title("MALDIquant - Mass Spectrometry Analyzer"),
+    tags$style(HTML("
+      .shiny-file-input-progress {
+        display: none !important;
+      }
+      .progress {
+        display: none !important;
+      }
+    "))
   ),
 
   titlePanel(
