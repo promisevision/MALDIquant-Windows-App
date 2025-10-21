@@ -211,6 +211,49 @@ Searched locations:
     stderrBuffer += errorMsg;
     console.error(`R Error: ${errorMsg}`);
 
+    // Check if Shiny is ready (sometimes outputs to stderr)
+    if (errorMsg.includes('Listening on') && !shinyReady) {
+      shinyReady = true;
+      console.log('✓ Shiny server is ready! (detected in stderr)');
+
+      // Wait for Shiny to actually respond before loading
+      const shinyUrl = `http://127.0.0.1:${shinyPort}`;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      console.log('⏳ Waiting for Shiny to respond...');
+
+      const checkShinyReady = setInterval(() => {
+        attempts++;
+
+        // Use http module to check if Shiny is responding
+        const http = require('http');
+        const req = http.get(shinyUrl, (res) => {
+          // Shiny responded!
+          clearInterval(checkShinyReady);
+          console.log(`✓ Shiny is responding! (HTTP ${res.statusCode})`);
+          console.log('🔗 Loading Shiny application...');
+
+          // Now load the URL
+          mainWindow.loadURL(shinyUrl);
+        });
+
+        req.on('error', (err) => {
+          if (attempts >= maxAttempts) {
+            clearInterval(checkShinyReady);
+            console.error('✗ Shiny did not respond after', maxAttempts, 'attempts');
+            console.error('Error:', err.message);
+            console.log('Try opening http://127.0.0.1:' + shinyPort + ' in a browser manually');
+          } else {
+            console.log(`[${attempts}/${maxAttempts}] Waiting for Shiny...`);
+          }
+        });
+
+        req.setTimeout(1000);
+        req.end();
+      }, 1000);
+    }
+
     // Check for package errors
     if (errorMsg.includes('there is no package called')) {
       const packageMatch = errorMsg.match(/there is no package called '(.+?)'/);
