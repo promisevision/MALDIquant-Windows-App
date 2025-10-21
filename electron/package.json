@@ -1,0 +1,72 @@
+{
+  "name": "maldiquant-windows-app",
+  "version": "1.0.0",
+  "description": "MALDIquant Windows Desktop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --windows --x64",
+    "build-all": "electron-builder --windows --x64 --ia32",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [
+    "MALDIquant",
+    "mass-spectrometry",
+    "data-analysis",
+    "R",
+    "shiny"
+  ],
+  "author": "MALDIquant Development Team",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0"
+  },
+  "build": {
+    "appId": "com.maldiquant.windowsapp",
+    "productName": "MALDIquant Analyzer",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "package.json",
+      "../R-app/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MALDIquant Analyzer"
+    },
+    "extraResources": [
+      {
+        "from": "../R-app",
+        "to": "R-app",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
+  }
+}
