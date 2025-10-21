@@ -5,8 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --windows --x64",
-    "build-all": "electron-builder --windows --x64 --ia32",
+    "build": "set CSC_IDENTITY_AUTO_DISCOVERY=false && electron-builder --windows --x64",
+    "build-all": "set CSC_IDENTITY_AUTO_DISCOVERY=false && electron-builder --windows --x64 --ia32",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
@@ -49,9 +49,9 @@
           ]
         }
       ],
-      "icon": "build/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "sign": null
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,
@@ -64,13 +64,6 @@
       {
         "from": "../R-app",
         "to": "R-app",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "../data",
-        "to": "data",
         "filter": [
           "**/*"
         ]
