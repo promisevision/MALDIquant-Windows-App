@@ -7,6 +7,12 @@ library(MALDIquantForeign)
 library(plotly)
 library(DT)
 
+# Optional packages
+USE_COLOURPICKER <- requireNamespace("colourpicker", quietly = TRUE)
+if (USE_COLOURPICKER) {
+  library(colourpicker)
+}
+
 # UI Definition
 ui <- fluidPage(
   titlePanel(
@@ -150,8 +156,18 @@ ui <- fluidPage(
                  h4("Application Settings"),
 
                  h5("Plot Settings"),
-                 colourInput("lineColor", "Spectrum Line Color:", value = "#0066CC"),
-                 colourInput("peakColor", "Peak Marker Color:", value = "#FF6600"),
+                 if (USE_COLOURPICKER) {
+                   tagList(
+                     colourInput("lineColor", "Spectrum Line Color:", value = "#0066CC"),
+                     colourInput("peakColor", "Peak Marker Color:", value = "#FF6600")
+                   )
+                 } else {
+                   tagList(
+                     textInput("lineColor", "Spectrum Line Color (hex):", value = "#0066CC"),
+                     textInput("peakColor", "Peak Marker Color (hex):", value = "#FF6600"),
+                     helpText("Install 'colourpicker' package for color picker widget")
+                   )
+                 },
                  numericInput("plotHeight", "Plot Height (px):", value = 600, min = 400, max = 1200),
 
                  hr(),
@@ -427,8 +443,13 @@ server <- function(input, output, session) {
 
   # Reset settings
   observeEvent(input$resetSettings, {
-    updateColourInput(session, "lineColor", value = "#0066CC")
-    updateColourInput(session, "peakColor", value = "#FF6600")
+    if (USE_COLOURPICKER) {
+      updateColourInput(session, "lineColor", value = "#0066CC")
+      updateColourInput(session, "peakColor", value = "#FF6600")
+    } else {
+      updateTextInput(session, "lineColor", value = "#0066CC")
+      updateTextInput(session, "peakColor", value = "#FF6600")
+    }
     updateNumericInput(session, "plotHeight", value = 600)
     updateSelectInput(session, "exportFormat", selected = "CSV")
     updateCheckboxInput(session, "verboseOutput", value = FALSE)
