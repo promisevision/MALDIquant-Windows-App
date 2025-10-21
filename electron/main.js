@@ -78,22 +78,49 @@ function startRShiny() {
   const rExecutable = findRExecutable();
 
   if (!rExecutable) {
-    dialog.showErrorBox(
-      'R Not Found',
-      'R is not installed or not found in PATH. Please install R and try again.'
-    );
+    const errorMessage = `R is not installed or could not be found.
+
+Please install R from: https://cran.r-project.org/
+
+Installation instructions:
+1. Download R for Windows
+2. Run the installer
+3. Important: Check "Add R to PATH" during installation
+4. Restart this application after installing R
+
+Searched locations:
+- System PATH
+- C:\\Program Files\\R\\
+- C:\\Program Files (x86)\\R\\
+- Windows Registry`;
+
+    dialog.showErrorBox('R Not Found', errorMessage);
     app.quit();
     return;
   }
 
+  console.log(`Using R executable: ${rExecutable}`);
+
   // R command to start Shiny
   const rCommand = `
+    cat("Checking R packages...\\n")
+    if (!require("shiny", quietly = TRUE)) {
+      stop("Package 'shiny' is not installed. Please run: install.packages('shiny')")
+    }
+    if (!require("MALDIquant", quietly = TRUE)) {
+      stop("Package 'MALDIquant' is not installed. Please run: install.packages('MALDIquant')")
+    }
+    cat("All required packages found\\n")
+    cat("Starting Shiny server...\\n")
     options(shiny.port = ${shinyPort}, shiny.host = '127.0.0.1')
     shiny::runApp('${rAppPath.replace(/\\/g, '/')}', launch.browser = FALSE)
   `;
 
+  console.log('Starting R process with command:');
+  console.log(rCommand);
+
   // Spawn R process
-  rProcess = spawn(rExecutable, ['--vanilla', '-e', rCommand], {
+  rProcess = spawn(rExecutable, ['--vanilla', '--quiet', '-e', rCommand], {
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -109,26 +136,52 @@ function startRShiny() {
     }
   });
 
+  let stderrBuffer = '';
+
   rProcess.stderr.on('data', (data) => {
-    console.error(`R Error: ${data}`);
+    const errorMsg = data.toString();
+    stderrBuffer += errorMsg;
+    console.error(`R Error: ${errorMsg}`);
+
+    // Check for package errors
+    if (errorMsg.includes('there is no package called')) {
+      const packageMatch = errorMsg.match(/there is no package called '(.+?)'/);
+      if (packageMatch) {
+        const packageName = packageMatch[1];
+        dialog.showErrorBox(
+          'Missing R Package',
+          `Required R package '${packageName}' is not installed.\n\nPlease install it by running in R:\ninstall.packages("${packageName}")\n\nOr run: source("R-app/install_packages.R")`
+        );
+      }
+    }
   });
 
   rProcess.on('error', (error) => {
     console.error('Failed to start R process:', error);
     dialog.showErrorBox(
-      'Failed to Start',
-      `Could not start R Shiny server: ${error.message}`
+      'Failed to Start R',
+      `Could not start R process.\n\nError: ${error.message}\n\nR executable: ${rExecutable}\n\nPlease ensure R is properly installed.`
     );
     app.quit();
   });
 
   rProcess.on('close', (code) => {
     console.log(`R process exited with code ${code}`);
+
     if (code !== 0 && mainWindow) {
-      dialog.showErrorBox(
-        'R Process Crashed',
-        'The R Shiny server has stopped unexpectedly.'
-      );
+      let errorMessage = `The R Shiny server has stopped unexpectedly.\n\nExit code: ${code}`;
+
+      if (code === 3221225477 || code === -1073741819) {
+        errorMessage += `\n\nThis usually means:\n- R is not properly installed\n- R packages are missing\n- Path issues with R installation`;
+      }
+
+      if (stderrBuffer) {
+        errorMessage += `\n\nError output:\n${stderrBuffer.slice(0, 500)}`;
+      }
+
+      errorMessage += `\n\nPlease check:\n1. R is installed from https://cran.r-project.org/\n2. Run: source("R-app/install_packages.R") in R\n3. Check console for detailed errors`;
+
+      dialog.showErrorBox('R Process Error', errorMessage);
     }
   });
 }
@@ -148,26 +201,97 @@ function stopRShiny() {
  * Find R executable
  */
 function findRExecutable() {
-  const possiblePaths = [
-    'R', // In PATH
-    'C:\\Program Files\\R\\R-4.3.2\\bin\\R.exe',
-    'C:\\Program Files\\R\\R-4.3.1\\bin\\R.exe',
-    'C:\\Program Files\\R\\R-4.2.3\\bin\\R.exe',
-    'C:\\Program Files\\R\\R-4.2.2\\bin\\R.exe',
-    'C:\\Program Files\\R\\R-4.1.3\\bin\\R.exe'
+  const { execSync } = require('child_process');
+  const fs = require('fs');
+
+  // Method 1: Try R in PATH
+  try {
+    execSync('R --version', { stdio: 'ignore' });
+    console.log('Found R in PATH');
+    return 'R';
+  } catch (e) {
+    console.log('R not found in PATH, searching in common locations...');
+  }
+
+  // Method 2: Search in Program Files
+  const programFilesLocations = [
+    process.env.ProgramFiles || 'C:\\Program Files',
+    process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
   ];
 
-  // Try to find R in common locations
-  for (const rPath of possiblePaths) {
-    try {
-      const { execSync } = require('child_process');
-      execSync(`"${rPath}" --version`, { stdio: 'ignore' });
-      return rPath;
-    } catch (e) {
-      // Continue to next path
+  for (const programFiles of programFilesLocations) {
+    const rBaseDir = path.join(programFiles, 'R');
+
+    if (fs.existsSync(rBaseDir)) {
+      try {
+        // Find all R-x.x.x folders
+        const rVersions = fs.readdirSync(rBaseDir)
+          .filter(name => name.startsWith('R-'))
+          .sort()
+          .reverse(); // Get latest version first
+
+        for (const version of rVersions) {
+          const rExePath = path.join(rBaseDir, version, 'bin', 'R.exe');
+          const rExePathX64 = path.join(rBaseDir, version, 'bin', 'x64', 'R.exe');
+
+          // Try x64 version first
+          if (fs.existsSync(rExePathX64)) {
+            try {
+              execSync(`"${rExePathX64}" --version`, { stdio: 'ignore', timeout: 5000 });
+              console.log(`Found R at: ${rExePathX64}`);
+              return rExePathX64;
+            } catch (e) {
+              // Continue searching
+            }
+          }
+
+          // Try standard version
+          if (fs.existsSync(rExePath)) {
+            try {
+              execSync(`"${rExePath}" --version`, { stdio: 'ignore', timeout: 5000 });
+              console.log(`Found R at: ${rExePath}`);
+              return rExePath;
+            } catch (e) {
+              // Continue searching
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error searching R directory:', e.message);
+      }
     }
   }
 
+  // Method 3: Check registry (Windows only)
+  if (process.platform === 'win32') {
+    try {
+      const registryPath = 'HKEY_LOCAL_MACHINE\\Software\\R-core\\R';
+      const result = execSync(`reg query "${registryPath}" /v InstallPath`, {
+        encoding: 'utf8',
+        timeout: 5000
+      });
+
+      const match = result.match(/InstallPath\s+REG_SZ\s+(.+)/);
+      if (match) {
+        const installPath = match[1].trim();
+        const rExePath = path.join(installPath, 'bin', 'R.exe');
+        const rExePathX64 = path.join(installPath, 'bin', 'x64', 'R.exe');
+
+        if (fs.existsSync(rExePathX64)) {
+          console.log(`Found R from registry: ${rExePathX64}`);
+          return rExePathX64;
+        }
+        if (fs.existsSync(rExePath)) {
+          console.log(`Found R from registry: ${rExePath}`);
+          return rExePath;
+        }
+      }
+    } catch (e) {
+      console.log('Could not read R from registry');
+    }
+  }
+
+  console.error('R executable not found anywhere');
   return null;
 }
 

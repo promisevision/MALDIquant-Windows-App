@@ -35,22 +35,35 @@ MALDIquant-Windows-App/
 
 ### Prerequisites
 
-- R (>= 4.0.0)
-- Node.js (>= 14.0.0)
-- npm or yarn
+- **R (>= 4.0.0)** - [Download](https://cran.r-project.org/)
+  - **⚠️ Important**: Check "Add R to PATH" during installation
+- **Node.js (>= 14.0.0)** - [Download](https://nodejs.org/)
+- npm (included with Node.js)
 
 ### Installation
 
-1. Install R dependencies:
+1. **Install R dependencies:**
 ```r
-install.packages(c("shiny", "MALDIquant", "MALDIquantForeign", "shinyFiles", "plotly", "DT"))
+# In R console
+source("R-app/install_packages.R")
 ```
 
-2. Install Node.js dependencies:
+2. **Install Node.js dependencies:**
 ```bash
 cd electron
 npm install
 ```
+
+### ⚠️ Common Issues
+
+**Error: "R process exited with code 3221225477"**
+
+This means R is not in your system PATH. Solutions:
+
+1. Verify R installation: `R --version` in Command Prompt
+2. If error, add R to PATH or reinstall R
+3. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed steps
+4. Restart your terminal/computer after fixing
 
 ### Running the Application
 
@@ -83,6 +96,18 @@ This project uses the MALDIquant package which is licensed under GPL (>= 3).
 
 Developed for mass spectrometry data analysis workflow automation.
 
+## Documentation
+
+- 📖 [INSTALLATION.md](INSTALLATION.md) - Complete installation and build guide
+- 🔧 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Solutions for common problems
+- 🚀 [QUICKSTART.md](QUICKSTART.md) - Quick start guide
+- 📚 [docs/USER_GUIDE.md](docs/USER_GUIDE.md) - End-user documentation
+- 💻 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) - Developer documentation
+
 ## Support
 
-For issues and questions, please refer to the documentation in the `docs/` folder.
+**Having issues?**
+1. Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) first
+2. Verify R is installed: `R --version`
+3. Ensure all packages installed: `source("R-app/install_packages.R")` in R
+4. See documentation in `docs/` folder
