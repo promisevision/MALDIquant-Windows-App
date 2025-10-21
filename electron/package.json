@@ -66,6 +66,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "../R-portable",
+        "to": "R-portable",
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   }

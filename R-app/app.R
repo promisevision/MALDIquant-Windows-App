@@ -51,7 +51,12 @@ ui <- fluidPage(
         condition = "input.doBaseline == true",
         selectInput("baselineMethod", "Baseline Method:",
                     choices = c("SNIP", "TopHat", "ConvexHull", "median"),
-                    selected = "SNIP")
+                    selected = "SNIP"),
+        conditionalPanel(
+          condition = "input.baselineMethod == 'TopHat'",
+          numericInput("halfWindowSizeBaseline", "Half Window Size (Baseline):",
+                       value = 20, min = 5, max = 100)
+        )
       ),
 
       hr(),
@@ -275,8 +280,25 @@ server <- function(input, output, session) {
                                    "median" = "median",
                                    "SNIP") # default
 
-          spectra <- removeBaseline(spectra,
-                                    method = baselineMethod)
+          # TopHat method requires halfWindowSize
+          if (baselineMethod == "TopHat") {
+            # Validate halfWindowSize is not too large for spectrum length
+            spectrumLength <- length(mass(spectra[[1]]))
+            maxHalfWindow <- floor(spectrumLength / 4)
+            actualHalfWindow <- min(input$halfWindowSizeBaseline, maxHalfWindow)
+
+            if (actualHalfWindow < input$halfWindowSizeBaseline) {
+              warning("halfWindowSize reduced to ", actualHalfWindow,
+                      " (spectrum too short for requested window size)")
+            }
+
+            spectra <- removeBaseline(spectra,
+                                      method = baselineMethod,
+                                      halfWindowSize = actualHalfWindow)
+          } else {
+            spectra <- removeBaseline(spectra,
+                                      method = baselineMethod)
+          }
         }
 
         # Normalization

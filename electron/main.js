@@ -147,72 +147,22 @@ Searched locations:
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
-  // Function to load Shiny with retry logic
-  function loadShinyWithRetry(attempt) {
-    const maxAttempts = 5;
-    const retryDelay = 3000; // 3 seconds between retries
-
-    if (attempt >= maxAttempts) {
-      console.error('Failed to load Shiny after', maxAttempts, 'attempts');
-      dialog.showMessageBox(mainWindow, {
-        type: 'warning',
-        title: 'Connection Issue',
-        message: 'Application is running but loading slowly',
-        detail: `The Shiny server is running at http://127.0.0.1:${shinyPort}\n\nYou can:\n1. Wait and try refreshing (Ctrl+R)\n2. Open in browser: http://127.0.0.1:${shinyPort}\n3. Restart the application`,
-        buttons: ['Open in Browser', 'Retry', 'Cancel']
-      }).then(result => {
-        if (result.response === 0) {
-          // Open in browser
-          require('electron').shell.openExternal(`http://127.0.0.1:${shinyPort}`);
-        } else if (result.response === 1) {
-          // Retry
-          loadShinyWithRetry(0);
-        }
-      });
-      return;
-    }
-
-    console.log(`Connection attempt ${attempt + 1}/${maxAttempts}...`);
-
-    mainWindow.loadURL(`http://127.0.0.1:${shinyPort}`);
-
-    // Set a timeout to check if loading was successful
-    const loadTimeout = setTimeout(() => {
-      console.log('Load timeout, retrying...');
-      loadShinyWithRetry(attempt + 1);
-    }, retryDelay);
-
-    // Clear timeout if page loads successfully
-    mainWindow.webContents.once('did-finish-load', () => {
-      clearTimeout(loadTimeout);
-      console.log('✓ Shiny application loaded successfully!');
-    });
-
-    // Handle load failures
-    mainWindow.webContents.once('did-fail-load', (event, errorCode, errorDescription) => {
-      clearTimeout(loadTimeout);
-      console.error('Load failed:', errorDescription);
-      console.log(`Retrying in ${retryDelay/1000} seconds...`);
-      setTimeout(() => {
-        loadShinyWithRetry(attempt + 1);
-      }, retryDelay);
-    });
-  }
-
   rProcess.stdout.on('data', (data) => {
     console.log(`R: ${data}`);
 
     // Check if Shiny is ready
-    if (data.toString().includes('Listening on')) {
-      console.log('Shiny server is ready!');
-      console.log('Loading application UI...');
-      console.log('Waiting for Shiny to fully initialize...');
+    if (data.toString().includes('Listening on') && !shinyReady) {
+      shinyReady = true;
+      console.log('✓ Shiny server is ready!');
+      console.log('⏳ Waiting 3 seconds for Shiny to initialize...');
 
-      // Wait a bit for Shiny to fully initialize, then try to connect
+      // Wait for Shiny to initialize, then load URL
       setTimeout(() => {
-        console.log('Attempting to connect to Shiny server...');
-        loadShinyWithRetry(0);
-      }, 3000); // Increased from 2000 to 3000ms
+        console.log('🔗 Loading Shiny application...');
+        mainWindow.loadURL(`http://127.0.0.1:${shinyPort}`);
+        console.log('ℹ Shiny UI may take 10-30 seconds to fully render.');
+        console.log('ℹ If stuck on loading screen: press Ctrl+R or open http://127.0.0.1:' + shinyPort + ' in browser');
+      }, 3000);
     }
   });
 
@@ -284,7 +234,23 @@ function findRExecutable() {
   const { execSync } = require('child_process');
   const fs = require('fs');
 
-  // Method 1: Search in Program Files FIRST (more reliable than PATH in MINGW)
+  // Method 0: Check for bundled portable R FIRST
+  console.log('Checking for bundled portable R...');
+  const portableRPath = path.join(process.resourcesPath, 'R-portable', 'bin', 'x64', 'Rscript.exe');
+
+  if (fs.existsSync(portableRPath)) {
+    try {
+      execSync(`"${portableRPath}" --version`, { stdio: 'ignore', timeout: 5000 });
+      console.log(`✓ Found bundled portable R at: ${portableRPath}`);
+      return { path: portableRPath, useRscript: true };
+    } catch (e) {
+      console.log('Bundled portable R found but not working, trying system R...');
+    }
+  } else {
+    console.log('No bundled portable R found, searching for system R...');
+  }
+
+  // Method 1: Search in Program Files (for system-installed R)
   console.log('Searching for R in Program Files...');
   const programFilesLocations = [
     process.env.ProgramFiles || 'C:\\Program Files',
