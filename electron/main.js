@@ -147,6 +147,58 @@ Searched locations:
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
+  // Function to load Shiny with retry logic
+  function loadShinyWithRetry(attempt) {
+    const maxAttempts = 5;
+    const retryDelay = 3000; // 3 seconds between retries
+
+    if (attempt >= maxAttempts) {
+      console.error('Failed to load Shiny after', maxAttempts, 'attempts');
+      dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: 'Connection Issue',
+        message: 'Application is running but loading slowly',
+        detail: `The Shiny server is running at http://127.0.0.1:${shinyPort}\n\nYou can:\n1. Wait and try refreshing (Ctrl+R)\n2. Open in browser: http://127.0.0.1:${shinyPort}\n3. Restart the application`,
+        buttons: ['Open in Browser', 'Retry', 'Cancel']
+      }).then(result => {
+        if (result.response === 0) {
+          // Open in browser
+          require('electron').shell.openExternal(`http://127.0.0.1:${shinyPort}`);
+        } else if (result.response === 1) {
+          // Retry
+          loadShinyWithRetry(0);
+        }
+      });
+      return;
+    }
+
+    console.log(`Connection attempt ${attempt + 1}/${maxAttempts}...`);
+
+    mainWindow.loadURL(`http://127.0.0.1:${shinyPort}`);
+
+    // Set a timeout to check if loading was successful
+    const loadTimeout = setTimeout(() => {
+      console.log('Load timeout, retrying...');
+      loadShinyWithRetry(attempt + 1);
+    }, retryDelay);
+
+    // Clear timeout if page loads successfully
+    mainWindow.webContents.once('did-finish-load', () => {
+      clearTimeout(loadTimeout);
+      console.log('✓ Shiny application loaded successfully!');
+    });
+
+    // Handle load failures
+    mainWindow.webContents.once('did-fail-load', (event, errorCode, errorDescription) => {
+      clearTimeout(loadTimeout);
+      console.error('Load failed:', errorDescription);
+      console.log(`Retrying in ${retryDelay/1000} seconds...`);
+      setTimeout(() => {
+        loadShinyWithRetry(attempt + 1);
+      }, retryDelay);
+    });
+  }
+
   rProcess.stdout.on('data', (data) => {
     console.log(`R: ${data}`);
 
@@ -154,11 +206,13 @@ Searched locations:
     if (data.toString().includes('Listening on')) {
       console.log('Shiny server is ready!');
       console.log('Loading application UI...');
-      console.log('This may take 30-60 seconds on first launch...');
+      console.log('Waiting for Shiny to fully initialize...');
+
+      // Wait a bit for Shiny to fully initialize, then try to connect
       setTimeout(() => {
-        console.log('Connecting to Shiny server...');
-        mainWindow.loadURL(`http://127.0.0.1:${shinyPort}`);
-      }, 2000);
+        console.log('Attempting to connect to Shiny server...');
+        loadShinyWithRetry(0);
+      }, 3000); // Increased from 2000 to 3000ms
     }
   });
 

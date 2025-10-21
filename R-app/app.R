@@ -251,16 +251,32 @@ server <- function(input, output, session) {
         # Smoothing
         if (input$doSmoothing) {
           incProgress(0.2, detail = "Applying smoothing...")
+
+          # Map UI method names to R function method names
+          smoothMethod <- switch(input$smoothMethod,
+                                 "SavitzkyGolay" = "SavitzkyGolay",
+                                 "MovingAverage" = "MovingAverage",
+                                 "SavitzkyGolay") # default
+
           spectra <- smoothIntensity(spectra,
-                                     method = tolower(input$smoothMethod),
+                                     method = smoothMethod,
                                      halfWindowSize = input$halfWindowSize)
         }
 
         # Baseline correction
         if (input$doBaseline) {
           incProgress(0.2, detail = "Removing baseline...")
+
+          # Map UI method names to R function method names
+          baselineMethod <- switch(input$baselineMethod,
+                                   "SNIP" = "SNIP",
+                                   "TopHat" = "TopHat",
+                                   "ConvexHull" = "ConvexHull",
+                                   "median" = "median",
+                                   "SNIP") # default
+
           spectra <- removeBaseline(spectra,
-                                    method = tolower(input$baselineMethod))
+                                    method = baselineMethod)
         }
 
         # Normalization

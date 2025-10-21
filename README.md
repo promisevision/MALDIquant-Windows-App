@@ -67,17 +67,34 @@ This means R is not in your system PATH. Solutions:
 
 ### Running the Application
 
-#### Development Mode (Shiny only)
+#### 🚀 Method 1: Browser Mode (Recommended - Fastest)
+```bash
+cd electron
+npm start
+
+# Wait for: "Listening on http://127.0.0.1:3838"
+# Then open browser to: http://127.0.0.1:3838
+```
+**Or manually:**
+```bash
+start http://127.0.0.1:3838
+```
+
+#### 💻 Method 2: R Console (Also Fast)
 ```r
 library(shiny)
 runApp("R-app")
 ```
 
-#### Desktop Mode (Electron + Shiny)
+#### 🖼️ Method 3: Desktop Mode (Electron - Slower)
 ```bash
 cd electron
 npm start
+# Wait 30-90 seconds for Electron window
+# Or use browser if loading takes too long
 ```
+
+**⚡ Tip**: Browser mode is much faster (10-20s vs 60-90s). See [ELECTRON_VS_BROWSER.md](ELECTRON_VS_BROWSER.md) for details.
 
 ## Building for Distribution
 
@@ -101,8 +118,10 @@ Developed for mass spectrometry data analysis workflow automation.
 - 📖 [INSTALLATION.md](INSTALLATION.md) - Complete installation and build guide
 - 🔧 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Solutions for common problems
 - 🚀 [QUICKSTART.md](QUICKSTART.md) - Quick start guide
+- ⚡ [ELECTRON_VS_BROWSER.md](ELECTRON_VS_BROWSER.md) - Browser vs Electron modes (READ THIS!)
 - 📚 [docs/USER_GUIDE.md](docs/USER_GUIDE.md) - End-user documentation
 - 💻 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) - Developer documentation
+- 🧪 [data/sample-data/HOW_TO_USE_TEST_FILES.md](data/sample-data/HOW_TO_USE_TEST_FILES.md) - Test file guide
 
 ## Support
 
