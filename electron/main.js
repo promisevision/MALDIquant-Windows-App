@@ -35,11 +35,24 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true
     },
     icon: path.join(__dirname, 'build', 'icon.png'),
     title: 'MALDIquant Analyzer',
     show: false // Don't show until ready
+  });
+
+  // Set Content Security Policy for Shiny
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' http://127.0.0.1:* ws://127.0.0.1:* data: blob:;"
+        ]
+      }
+    });
   });
 
   // Create application menu
@@ -157,49 +170,67 @@ Searched locations:
       console.log('✓ Shiny server is ready!');
       console.log('⏳ Waiting 5 seconds for Shiny to fully initialize...');
 
-      // Wait longer for Shiny to initialize
+      // Wait for Shiny to initialize
       setTimeout(() => {
         console.log('🔗 Loading Shiny application in Electron...');
-        mainWindow.loadURL(`http://127.0.0.1:${shinyPort}`);
+        console.log('URL: http://127.0.0.1:' + shinyPort);
 
-        // Periodically check if Shiny UI has actually loaded
-        let checkAttempts = 0;
-        const maxAttempts = 20; // 60 seconds total (20 * 3s)
+        // Force load the URL (will replace loading.html)
+        mainWindow.loadURL(`http://127.0.0.1:${shinyPort}`).then(() => {
+          console.log('✓ loadURL() completed');
+        }).catch(err => {
+          console.error('✗ loadURL() failed:', err);
+        });
 
-        const checkInterval = setInterval(() => {
-          checkAttempts++;
-          console.log(`Verifying Shiny UI loaded... (attempt ${checkAttempts}/${maxAttempts})`);
+        // Wait a bit for page to start loading, then check periodically
+        setTimeout(() => {
+          let checkAttempts = 0;
+          const maxAttempts = 20; // 60 seconds total
 
-          mainWindow.webContents.executeJavaScript(`
-            (function() {
-              try {
-                const hasContainer = document.querySelector('.container-fluid') !== null;
-                const hasContent = document.body && document.body.innerHTML.length > 1000;
-                const hasShiny = document.querySelector('[class*="shiny"]') !== null;
-                return hasContainer || (hasContent && hasShiny);
-              } catch(e) {
-                return false;
+          const checkInterval = setInterval(() => {
+            checkAttempts++;
+
+            mainWindow.webContents.executeJavaScript(`
+              (function() {
+                try {
+                  // Check if we're still on loading.html
+                  const isLoadingPage = document.body.innerHTML.includes('MALDIquant');
+                  const isShinyPage = document.querySelector('.container-fluid') !== null ||
+                                      document.querySelector('[class*="shiny"]') !== null ||
+                                      document.body.innerHTML.includes('shiny');
+
+                  console.log('Page check - isLoadingPage:', isLoadingPage, 'isShinyPage:', isShinyPage);
+
+                  return {
+                    isShiny: isShinyPage,
+                    bodyLength: document.body.innerHTML.length,
+                    url: window.location.href
+                  };
+                } catch(e) {
+                  return { error: e.message };
+                }
+              })()
+            `).then(result => {
+              console.log(`[Attempt ${checkAttempts}/${maxAttempts}] Page status:`, result);
+
+              if (result.isShiny) {
+                clearInterval(checkInterval);
+                console.log('✅ Shiny UI successfully loaded!');
+              } else if (checkAttempts >= maxAttempts) {
+                clearInterval(checkInterval);
+                console.log('⚠️ Timeout waiting for Shiny UI');
+                console.log('Current URL:', result.url);
+                console.log('Try pressing Ctrl+R to refresh, or open http://127.0.0.1:' + shinyPort + ' in browser');
               }
-            })()
-          `).then(loaded => {
-            if (loaded) {
-              clearInterval(checkInterval);
-              console.log('✅ Shiny UI successfully loaded in Electron!');
-            } else if (checkAttempts >= maxAttempts) {
-              clearInterval(checkInterval);
-              console.log('⚠️ Shiny UI verification timeout');
-              console.log('ℹ️  If you still see loading screen:');
-              console.log('   - Press Ctrl+R to refresh');
-              console.log('   - Or open http://127.0.0.1:' + shinyPort + ' in browser');
-            }
-          }).catch(err => {
-            if (checkAttempts >= maxAttempts) {
-              clearInterval(checkInterval);
-              console.log('⚠️ Unable to verify Shiny UI status');
-            }
-          });
-        }, 3000);
-      }, 5000);
+            }).catch(err => {
+              console.log(`[Attempt ${checkAttempts}] Check failed:`, err.message);
+              if (checkAttempts >= maxAttempts) {
+                clearInterval(checkInterval);
+              }
+            });
+          }, 3000);
+        }, 2000);
+      }, 3000);
     }
   });
 
