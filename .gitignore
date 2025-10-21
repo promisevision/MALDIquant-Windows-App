@@ -5,15 +5,17 @@
 *.Rproj
 
 # Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+electron/node_modules/
+electron/npm-debug.log*
+electron/yarn-debug.log*
+electron/yarn-error.log*
+electron/package-lock.json
 
 # Electron
 electron/dist/
+electron/out/
 electron/build/r-portable/
-*.log
+electron/*.log
 
 # OS
 .DS_Store
@@ -27,11 +29,6 @@ desktop.ini
 *.swo
 *~
 
-# Build outputs
-dist/
-out/
-build/
-
 # Temporary files
 tmp/
 temp/
@@ -43,7 +40,7 @@ data/**/*.mzXML
 !data/sample-data/.gitkeep
 
 # User settings
-electron-store/
+.electron-store/
 
 # Package files
 *.zip
