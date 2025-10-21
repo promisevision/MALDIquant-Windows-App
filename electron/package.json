@@ -50,7 +50,8 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "sign": null
     },
     "nsis": {
       "oneClick": false,
@@ -68,12 +69,15 @@
         ]
       },
       {
-        "from": "../R-portable",
-        "to": "R-portable",
+        "from": "../data",
+        "to": "data",
         "filter": [
           "**/*"
         ]
       }
-    ]
+    ],
+    "extraMetadata": {
+      "name": "maldiquant-analyzer"
+    }
   }
 }
