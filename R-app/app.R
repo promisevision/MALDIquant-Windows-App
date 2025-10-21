@@ -15,15 +15,20 @@ if (USE_COLOURPICKER) {
 
 # UI Definition
 ui <- fluidPage(
-  titlePanel(
-    div(
-      img(src = "logo.png", height = 50, style = "display: inline-block; margin-right: 10px;"),
-      "MALDIquant Analyzer",
-      style = "display: flex; align-items: center;"
-    )
+  tags$head(
+    tags$title("MALDIquant - Mass Spectrometry Analyzer")
   ),
 
-  theme = bslib::bs_theme(version = 4, bootswatch = "flatly"),
+  titlePanel(
+    div(
+      tags$span("⚛", style = "font-size: 40px; margin-right: 15px;"),
+      tags$strong("MALDIquant Mass Spectrometry Analyzer", style = "font-size: 24px;"),
+      style = "display: flex; align-items: center; color: #2c3e50;"
+    ),
+    windowTitle = "MALDIquant Analyzer"
+  ),
+
+  theme = bslib::bs_theme(version = 4, bootswatch = "cosmo"),
 
   sidebarLayout(
     sidebarPanel(
@@ -64,6 +69,13 @@ ui <- fluidPage(
       h4("Peak Detection"),
       numericInput("snr", "Signal-to-Noise Ratio (SNR):", value = 3, min = 1, max = 20),
       numericInput("halfWindowSizePeak", "Half Window Size:", value = 20, min = 1, max = 100),
+
+      checkboxInput("doAlignment", "Align Peaks", value = FALSE),
+      conditionalPanel(
+        condition = "input.doAlignment == true",
+        numericInput("tolerance", "Tolerance (ppm):", value = 500, min = 50, max = 2000),
+        helpText("Align peaks across multiple spectra")
+      ),
 
       hr(),
 
@@ -306,12 +318,20 @@ server <- function(input, output, session) {
         spectra <- calibrateIntensity(spectra, method = "TIC")
 
         # Peak detection
-        incProgress(0.2, detail = "Detecting peaks...")
+        incProgress(0.15, detail = "Detecting peaks...")
         peaks <- detectPeaks(spectra,
                             SNR = input$snr,
                             halfWindowSize = input$halfWindowSizePeak)
 
-        incProgress(0.2, detail = "Finalizing...")
+        # Peak alignment (if enabled)
+        if (input$doAlignment && length(peaks) > 1) {
+          incProgress(0.15, detail = "Aligning peaks...")
+          peaks <- alignPeaks(peaks,
+                             tolerance = input$tolerance / 1e6,  # Convert ppm to fraction
+                             reference = peaks[[1]])
+        }
+
+        incProgress(0.1, detail = "Finalizing...")
 
         values$processedSpectra <- spectra
         values$peaks <- peaks
