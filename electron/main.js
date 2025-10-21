@@ -11,6 +11,7 @@ const store = new Store();
 let mainWindow;
 let rProcess;
 let shinyPort = 3838;
+let shinyReady = false;
 
 // Configuration
 const isDev = !app.isPackaged;
@@ -154,15 +155,51 @@ Searched locations:
     if (data.toString().includes('Listening on') && !shinyReady) {
       shinyReady = true;
       console.log('✓ Shiny server is ready!');
-      console.log('⏳ Waiting 3 seconds for Shiny to initialize...');
+      console.log('⏳ Waiting 5 seconds for Shiny to fully initialize...');
 
-      // Wait for Shiny to initialize, then load URL
+      // Wait longer for Shiny to initialize
       setTimeout(() => {
-        console.log('🔗 Loading Shiny application...');
+        console.log('🔗 Loading Shiny application in Electron...');
         mainWindow.loadURL(`http://127.0.0.1:${shinyPort}`);
-        console.log('ℹ Shiny UI may take 10-30 seconds to fully render.');
-        console.log('ℹ If stuck on loading screen: press Ctrl+R or open http://127.0.0.1:' + shinyPort + ' in browser');
-      }, 3000);
+
+        // Periodically check if Shiny UI has actually loaded
+        let checkAttempts = 0;
+        const maxAttempts = 20; // 60 seconds total (20 * 3s)
+
+        const checkInterval = setInterval(() => {
+          checkAttempts++;
+          console.log(`Verifying Shiny UI loaded... (attempt ${checkAttempts}/${maxAttempts})`);
+
+          mainWindow.webContents.executeJavaScript(`
+            (function() {
+              try {
+                const hasContainer = document.querySelector('.container-fluid') !== null;
+                const hasContent = document.body && document.body.innerHTML.length > 1000;
+                const hasShiny = document.querySelector('[class*="shiny"]') !== null;
+                return hasContainer || (hasContent && hasShiny);
+              } catch(e) {
+                return false;
+              }
+            })()
+          `).then(loaded => {
+            if (loaded) {
+              clearInterval(checkInterval);
+              console.log('✅ Shiny UI successfully loaded in Electron!');
+            } else if (checkAttempts >= maxAttempts) {
+              clearInterval(checkInterval);
+              console.log('⚠️ Shiny UI verification timeout');
+              console.log('ℹ️  If you still see loading screen:');
+              console.log('   - Press Ctrl+R to refresh');
+              console.log('   - Or open http://127.0.0.1:' + shinyPort + ' in browser');
+            }
+          }).catch(err => {
+            if (checkAttempts >= maxAttempts) {
+              clearInterval(checkInterval);
+              console.log('⚠️ Unable to verify Shiny UI status');
+            }
+          });
+        }, 3000);
+      }, 5000);
     }
   });
 
