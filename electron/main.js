@@ -215,29 +215,8 @@ function findRExecutable() {
   const { execSync } = require('child_process');
   const fs = require('fs');
 
-  // Method 1: Try R/Rscript in PATH
-  // Note: In MINGW/Git Bash, 'R' wrapper might not work with spawn()
-  // Prefer Rscript.exe or R.exe with full extension
-  const pathCommands = [
-    { cmd: 'Rscript.exe', useRscript: true },
-    { cmd: 'R.exe', useRscript: false },
-    { cmd: 'Rscript', useRscript: true },
-    { cmd: 'R', useRscript: false }
-  ];
-
-  for (const { cmd, useRscript } of pathCommands) {
-    try {
-      execSync(`${cmd} --version`, { stdio: 'ignore', timeout: 5000 });
-      console.log(`Found ${cmd} in PATH`);
-      return { path: cmd, useRscript };
-    } catch (e) {
-      // Try next command
-    }
-  }
-
-  console.log('R not found in PATH, searching in common locations...');
-
-  // Method 2: Search in Program Files
+  // Method 1: Search in Program Files FIRST (more reliable than PATH in MINGW)
+  console.log('Searching for R in Program Files...');
   const programFilesLocations = [
     process.env.ProgramFiles || 'C:\\Program Files',
     process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
@@ -349,7 +328,50 @@ function findRExecutable() {
     }
   }
 
+  // Method 3: Try R/Rscript in PATH as last resort
+  // Note: In MINGW/Git Bash, PATH commands might not work reliably with spawn()
+  console.log('Trying to find R in PATH as last resort...');
+
+  const pathCommands = [
+    { cmd: 'Rscript.exe', useRscript: true },
+    { cmd: 'R.exe', useRscript: false },
+    { cmd: 'Rscript', useRscript: true },
+    { cmd: 'R', useRscript: false }
+  ];
+
+  for (const { cmd, useRscript } of pathCommands) {
+    try {
+      // First check if command exists
+      execSync(`${cmd} --version`, { stdio: 'ignore', timeout: 5000 });
+
+      // Try to get full path using 'where' command (Windows)
+      try {
+        const whereOutput = execSync(`where ${cmd}`, { encoding: 'utf8', timeout: 5000 });
+        const fullPath = whereOutput.trim().split('\n')[0].trim();
+
+        // Verify the path exists and is executable
+        if (fs.existsSync(fullPath)) {
+          console.log(`Found ${cmd} in PATH at: ${fullPath}`);
+          return { path: fullPath, useRscript };
+        }
+      } catch (whereError) {
+        console.log(`'where' command failed for ${cmd}, trying command name directly`);
+      }
+
+      // Fallback: use command name directly (may not work in MINGW)
+      console.log(`Using ${cmd} from PATH (command name)`);
+      return { path: cmd, useRscript };
+    } catch (e) {
+      // Try next command
+    }
+  }
+
   console.error('R executable not found anywhere');
+  console.error('Searched locations:');
+  console.error('- C:\\Program Files\\R\\');
+  console.error('- C:\\Program Files (x86)\\R\\');
+  console.error('- Windows Registry');
+  console.error('- System PATH');
   return null;
 }
 
